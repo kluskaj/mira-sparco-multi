@@ -20,11 +20,11 @@ add the following options to mira2:
 
 `-sparco_model=`      a list the model(s) you want to use (See Sect. Implemented Models), for example: `-sparco_model=star,star,UD,bg`
 
-`-sparco_flux=`  a list of flux ratios for the model(s)
+`-sparco_flux=`  a list of flux ratios for the model(s). Must be smaller than 1.
 
-`-sparco_w0=`         central wavelengths for flux power laws computation for chromaticity (See Sect. Implemented Models)
+`-sparco_w0=`         central wavelengths where the flux ratios are effective
 
-`-sparco_spectrum=`  Type of spectral behaviour for *the reconstructed image and model(s)*. Can be either: "pow" for a power law, "BB" for a blackbody or "spectrum" for a spectrum specified in an ascii file (TO BE IMPLEMENTED).
+`-sparco_spectrum=`  Type of spectral behaviour for **the reconstructed image and model(s)**. Can be either: `pow` for a power law, `BB` for a blackbody or `spectrum` for a spectrum specified in an ascii file (TO BE IMPLEMENTED).
 
 `-sparco_index=` if at least one `sparco_spectrum` is a `pow` then you have to specify the spectral index list here
 
@@ -51,6 +51,14 @@ Needs `-sparco_params=UD` where UD is the disk diameter in mas.
 * **image**  It adds the image computed from specified fits-file (TO BE IMPLEMENTED)
 
 Needs `-sparco_image=file` where file is the fits-file of the image
+
+## Example
+
+* If you want to reconstruct a ring (at 1500K) around an evolved binary where the primary (flux ratio at 1.65mum is 60%) is marginally resolved (UD=0.5mas) and the secondary has a temperature of 2000K, has a 3% of flux ratio at 1.65mum and is shifted by d(ra)=-0.7mas and d(dec)=-0.6mas, then write:
+
+`ymira -plugin=sparcomulti -your_mira_parameters -sparco_model=UD,star -sparco_w0=1.65 -sparco_flux=0.6,0.03 -sparco_spectrum=BB,pow,BB -sparco_index=-4 -sparco_temp=1500,4000 -sparco_params=0.5 -sparco_xy=0,0,-0.7,-0.6 -initial=Dirac your_data.fits outputfile.fits`
+
+where `-your-mira-parameters` could be `-pixelsize=0.5mas -fov=80mas -regul=hyperbolic -mu=3e2 -tau=5e-5 -ftol=0 -gtol=0 -maxeval=1000 -overwrite -save_visibilities -save_initial -normalization=1 -min=0 -verb=10`
 
 ## Contact
 

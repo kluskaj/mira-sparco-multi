@@ -1,0 +1,612 @@
+/*
+ * mira2_plugin_sparco-multi.i
+ *
+ * Implement a more verstaile version of SPARCO plugin to mira2
+ *
+ */
+
+//MIRA_PLUGDIR = "~/apps/src/mira2_plugin_sparco";
+
+
+func mira_plugin_sparcomulti_init(nil) {
+  /*DOCUMENT mira_plugin_sparco-multi_init(nil);
+
+  Initialisation of the plugin from the parameters read in the
+  command line.
+  */
+
+  inform, "Loading \"sparco\" plugin...";
+
+  SPARCO_options = _lst("\nSparco specific options",
+    _lst("sparco_model", "star", "NAME", OPT_STRING_LIST,
+         "Name of the SPARCO model used"),
+    _lst("sparco_params", [], "VALUES", OPT_REAL_LIST,
+         "Parameters used with SPARCO"),
+    _lst("sparco_w0", [], "VALUE", OPT_REAL,
+         "Central wavelength (in microns) for SPARCO"),
+    _lst("sparco_image", [], "NAME", OPT_STRING,
+         "Name of the fits file that are needed if i;age types specified"),
+    _lst("sparco_spectrum", [], "NAME", OPT_STRING_LIST,
+         "Type of spectrum that model has/have"),
+    _lst("sparco_file", [], "NAME", OPT_STRING_LIST,
+         "Name of the ascii file where the spectrum(a) is/are"),
+    _lst("sparco_index", [], "VALUE", OPT_REAL_LIST,
+         "Spectral index(es)"),
+    _lst("sparco_temp", [], "VALUE", OPT_REAL_LIST,
+         "Temperature(s) for blackbody"),
+    _lst("sparco_xy", [], "VALUE", OPT_REAL_LIST,
+         "x and y shifts (mas) of the models"),
+    _lst("sparco_flux", [], "VALUE", OPT_REAL_LIST,
+         "flux ratios of the models at w0")
+         );
+
+  plugin = mira_new_plugin(options = SPARCO_options,
+                parse_options = parse_options,
+                tweak_visibilities=tweak_visibilities,
+                tweak_gradient=tweak_gradient,
+                add_keywords=add_keywords,
+                add_extensions=add_extensions
+                  );
+
+  return plugin;
+}
+
+func parse_options(plugin, opt)
+/* DOCUMENT parse_options(plugin, opt)
+
+  plugin is a hash_table with following arguments:
+
+  plugin.model = name of the model in SPARCO. It can be:
+                       "star", "binary", "UD".
+  plugin.params = vector of necessary parameters for the
+                         models
+  plugin.w0 = central wavelenghts for computation of chromaticity
+
+  plugin.image = a fits-file with the image that will be used as a
+                        SPARCO model
+
+*/
+
+{
+  inform, "toto";
+  local sparco, params, w0, image;
+
+  h_set, opt, flags=opt.flags | MIRA_KEEP_WAVELENGTH;
+
+  /* Modify options if needed, for example xmin xmax
+  h_set, opt, an_option=my_needed_value;
+
+  /* Read SPARCO settings */
+  sparco = opt.sparco_model;
+  params = opt.sparco_params;
+  w0 = opt.sparco_w0;
+  image = opt.sparco_image;
+  type = opt.sparco_type;
+  file = opt.sparco_file;
+  temp = opt.sparco_temp;
+  index = opt.sparco_index;
+  shift = opt.sparco_xy;
+  flux = opt.sparco_flux;
+  spectrum = opt.sparco_spectrum;
+
+  if ( !is_void(w0) ) {
+    w0 *= 1e-6;
+  };
+
+  // FIXME: continue to modify here !!!!!!!!
+
+  if (!is_void(sparco)) {
+
+    /* How many models? */
+    nmods = numberof(sparco);
+    nstar = numberof(where(sparco == "star"));
+    nUD   = numberof(where(sparco == "UD"));
+    nbg   = numberof(where(sparco == "bg"));
+    nimage = numberof(where(sparco == "image"));
+
+    if (nmods != nstar + nUD + nimage) {
+      throw, "The list of names is not correct can only be one of: \"star\", \"UD\", \"bg\" or \"image\" ";
+    }
+
+    /* Test the right number of parameters given the models */
+    if (numberof(image) != nimage) {
+      throw, "The same number of image files need to be specified than the number of image models (n= %i )", nimage;
+    };
+
+    if (numberof(shift) == 0 ) {
+      inform, "All the models are centered at (0,0).";
+      shift = array(0.0, (nmods-nbg)*2);
+    } else if (numberof(shift) != 2*(nmods-nbg) | numberof(shift) != 2*nmods) {
+      throw, "Each model (except bg) should have a specified the relative shift in the x and y direction w.r.t. to the reconstructed image";
+    } else if (numberof(shift) != 2*(nmods-nbg)) {
+      shift2 = [];
+      for (i=1; i<=nmods; ++i) {
+        if (model(i) == "bg") {
+          grow, shift2, [0,0];
+        } else {
+          idx = 2*i-1;
+          grow, shift2, shift(idx:idx+1);
+        }
+      };
+      shift = shift2;
+    };
+
+    if (numberof(flux) != nmods ) {
+      throw, "Each model should have its flux ratio. The flux ratio of the reconstructed image will be 1-f_models."
+    }
+
+    if (sum(flux) >= 1 | sum(flux) < 0) {
+      throw, "The sum of the relative fluxes should be lower than one and positive (currently %f)", sum(flux);
+    }
+
+    if (numberof(spectrum) != nmods+1 ) {
+      throw, "Each model and the reconstrcuted image should have a relative spectrum. It can be either \"pow\", \"BB\" or \"spectrum\" "
+    }
+
+    if (numberof(params) != nUD ) {
+      throw, "The number of parameters does not match the number of \"UD\" models";
+    }
+
+    p=0;
+    for (i=1; i<=nmods; ++i) {
+      if (flux(i) < 0) {
+        throw, "fluxes should be positive (negative fluxes not implemented)";
+      };
+      if (sparco(i) == "UD") {
+        p += 1;
+        if (params(p) <= 0) {
+          throw, "The UD diameter should be positive";
+        };
+        inform, "Model %i is a %s with a %f mas diameter, with a flux ratio of %f and a %s spectrum.", i, sparco(i), params(p), flux(i), spectrum(i+1) ;
+      } else {
+        inform, "Model %i is a %s, with a flux ratio of %f and a %s spectrum.", i, sparco(i), flux(i), spectrum(i+1) ;
+      };
+    };
+  } else {
+    throw, "no models specified...";
+  };
+
+h_set, plugin, model=sparco,
+               params=params,
+               flux=flux,
+               w0=w0,
+               image=image,
+               index=index,
+               temp=temp,
+               file=file,
+               shift=shift,
+               type=type,
+               nmods=nmods,
+               nimages=nimage,
+               nbg=nbg,
+               nstar=nstar,
+               nUD=nUD,
+               spectrum=spectrum,
+               specinit=1n,
+               imageinit=1n,
+               visinit=1n;
+
+};
+
+func _get_spectrum(type, w, w0, index=, temp=, file=)
+/* DOCUMENT _get_spectrum(type, w, w0, index=, temp=, file=);
+
+  DO NOT USE OUTSIDE THE SPARCO PLUGIN
+
+  Defines the spectrum of a component with respect of
+  what is specified
+  w    = the wavelengths at which the spectrum will be computed
+         (meters)
+  w0   = central wavelength (meters)
+  type = "pow",  "BB",        "spectrum"
+  index= powerlaw index
+  temp = black body temperature (K)
+  file = ascii file with the spectrum
+
+*/
+{
+  local star;
+
+  if (type == "pow") {
+  star = (w/w0)^index;
+} else if (plugin.startype == "BB") {
+  star = _BB(w,temp)/_BB(w0,temp);
+} else {
+  throw, "Spectrum not implemented yet";
+}
+
+  return star
+};
+
+func readSpectrum(file, w)
+/* DOCUMENT readSpectrum(master, file);
+
+  Reads the ascii file and interpolates the spectrum to
+  measured wavelengths
+
+ */
+{}
+
+func readImage(file, master)
+/* DOCUMENT readImage(master, file);
+
+  Reads the fits file and reshape the image to fit the
+  reconstructed one.
+
+ */
+{}
+
+func tweak_visibilities (master, vis)
+/* DOCUMENT tweak_complex_visibilities (master, vis);
+
+  Takes the complex visibilities from the image and
+  adds the selected sparco model to return complex
+  visibilities of image + SPARCO model
+
+*/
+{
+ plugin = mira_plugin(master);
+ model = plugin.model;
+ spectrum = plugin.spectrum;
+ index = plugin.index;
+ temp = plugin.temp;
+ file = plugin.file;
+ nmods=plugin.nmods;
+
+ /* compute and store spectra */
+ if (plugin.specinit) {
+   w = mira_model_wave(master);
+   nw = numberof(w);
+   w0 = plugin.w0;
+   spectra = array(double, nw, nmods+1);
+   ii = it = is = 0;
+   for (i=1; i<=plugin.nmods+1; ++i) {
+     if (spectrum(i) == "pow") {
+       ii +=1
+       spectra(,i) = _get_spectrum(spectrum(i), w, w0,
+        index=index(ii));
+     } else if (spectrum(i) == "BB") {
+       it +=1;
+       spectra(,i) = _get_spectrum(spectrum(i), w, w0,
+       temp=temp(it));
+     } else {
+      is +=1;
+      spectra(,i) = readSpectrum(file(is), w);
+     }
+   h_set, plugin, spectra = spectra,
+                  spectruminit = 0n,
+                  caca=1;
+ };
+
+ /* Read the images */
+ if (plugin.nimages>0 & plugin.imageinit) {
+   nimg = mira_image_size(master, 1);
+   images = array(double, n, n, plugin.nimages);
+   throw, "model made of image wait for Jacques to implement it..."
+   h_set, plugin, images=images;
+                  imageinit=0n;
+   };
+ };
+
+ /* Compute the model complex visibilities */
+ if (plugin.visinit) {
+   w = mira_model_wave(master);
+   visibilities = array(double, 2, numberof(w), nmods)
+   ip = 0;
+   for (i=1; i<=nmods; ++i) {
+     if (model(i) == "star") {
+       visibilities(,,i) = mira_sparco_star(master, shift(i));
+     } else if (model(i) == "UD") {
+       ip +=1;
+       visibilities(,,i) = mira_sparco_UD(master, shift(i), params(ip));
+     } else if (model(i) == "bg" ) {
+       visibilities(,,i) = mira_sparco_bg(master);
+     } else if (model(i) == "image") {
+       visibilities(,,i) = mira_sparco_image(master);
+     } else {throw, " %s not implemented yet.", model(i)};
+   };
+
+   h_set, plugin, visibilities=visibilities;
+                  visinit=0n;
+ }
+
+ vis = mira_sparco_vis(master, vis);
+
+return vis;
+}
+
+func tweak_gradient (master, grd)
+/* DOCUMENT tweak_complex_gradient (master, grd);
+
+  Takes the complex gradient on the image and
+  normalise it to take into account SPARCO
+
+  SEE ALSO: mira_sparco_star, mira_sparco_UD, mira_sparco_binary.
+*/
+{
+  plugin = mira_plugin(master);
+  /* Gradient modification for SPARCO */
+  if (plugin.model == "star" | plugin.model == "UD" | plugin.model == "image") {
+    fs0 = plugin.params(1);
+    denv = plugin.params(2);
+    w = mira_model_wave(master);
+    w0 = plugin.w0;
+
+    fs = fs0 * plugin.star_spectrum;
+    fd = (1.-fs0) * (w/w0)^denv;
+    ftot = fs + fd;
+
+    grd_re = grd(1,..);
+    grd_im = grd(2,..);
+
+    grd_re *= ftot / fd;
+    grd_im *= ftot / fd;
+
+    grd = [grd_re, grd_im];
+    grd = transpose(grd);
+
+  } else if ( plugin.model == "binary") {
+
+    fs0 = plugin.params(1);
+    denv = plugin.params(2);
+    fbin0 = plugin.params(3);
+    w = mira_model_wave(master);
+    w0 = plugin.w0;
+
+    fs = fs0 * plugin.star_spectrum;
+    fbin = fbin0 * (w/w0)^-4;
+    fd = (1-fs0-fbin0) * (w/w0)^denv;
+    ftot = fs + fd + fbin;
+
+    grd_re = grd(1,..);
+    grd_im = grd(2,..);
+
+    grd_re *= ftot / fd;
+    grd_im *= ftot / fd;
+
+    grd = [grd_re, grd_im];
+    grd = transpose(grd);
+  };
+
+  return grd
+
+}
+
+
+func mira_sparco_vis (master, vis)
+/* DOCUMENT mira_sparco_vis (master, vis);
+
+  Linearly adds all the requested models to the current
+  reconstructed image.
+
+*/
+{
+  plugin = mira_plugin(master);
+  spectra = plugin.spectra;
+  visibilities = plugin*visibilities;
+  flux = plugin.flux;
+
+  fimg0 = 1 - sum(flux);
+  ftot = fimg = fimg0 * spectra(,1);
+
+  vis_re = fimg * vis(1,..);
+  vis_im = fimg * vis(2,..);
+
+  for (i=1; i<=nmods; ++i) {
+    vis_re += flux(i) * spectra(,i+1) * visibilities(1,,i);
+    vis_im += flux(i) * spectra(,i+1) * visibilities(2,,i);
+    ftot += flux(i) * spectra(,i+1);
+  }
+
+  vis_re /= ftot;
+  vis_im /= ftot;
+
+  vis = [vis_re, vis_im];
+  vis = transpose(vis);
+
+  return vis;
+
+};
+
+
+func mira_sparco_star(master, shift)
+  /* DOCUMENT mira_sparco_star(master, vis);
+
+     Compute the total complex visibilities of a shifted point source
+
+     SEE ALSO: mira_sparco_UD, mira_sparco_binary.
+   */
+{
+  plugin = mira_plugin(master);
+  w = mira_model_wave(master);
+  u = mira_model_u(master) / w;
+  v = mira_model_v(master) / w;
+  xbin = shift(1) * MIRA_MAS;
+  ybin = shift(2) * MIRA_MAS;
+
+  vis_re = cos( -2*pi*(xbin*u + ybin*v) );
+  vis_im = sin( -2*pi*(xbin*u + ybin*v) );
+
+  vis = [vis_re, vis_im];
+  vis = transpose(vis);
+
+  return vis;
+};
+
+func mira_sparco_bg(master)
+  /* DOCUMENT mira_sparco_bg(master);
+
+     Compute the total complex visibilities of a background
+
+     SEE ALSO: mira_sparco_UD, mira_sparco_binary.
+   */
+{
+  plugin = mira_plugin(master);
+  w = mira_model_wave(master);
+
+  vis_re = vis_im = array(0., dimsof(w));
+
+  vis = [vis_re, vis_im];
+  vis = transpose(vis);
+
+  return vis;
+};
+
+
+func mira_sparco_UD(master, shift, UD)
+/* DOCUMENT mira_sparco_UD(master, vis);
+
+   Compute the total complex visibilities of a Uniform Disk
+
+   SEE ALSO: mira_sparco_star.
+ */
+{
+  plugin = mira_plugin(master);
+  w = mira_model_wave(master);
+  u = mira_model_u(master)/w;
+  v = mira_model_v(master)/w;
+  xbin = shift(1) * MIRA_MAS;
+  ybin = shift(2) * MIRA_MAS;
+  UD *= MIRA_MAS;
+  B = abs(u,v);
+
+  if (UD==0.) {
+    V_UD = array(1., dimsof(u));
+  } else {
+    V_UD = 2*bessj1(pi * B * UD) / ( pi * B * UD);
+  }
+  vis_re = V_UD * cos( -2*pi*(xbin*u + ybin*v) );
+  vis_im = V_UD * sin( -2*pi*(xbin*u + ybin*v) );
+
+  vis = [vis_re, vis_im];
+  vis = transpose(vis);
+
+  return vis;
+
+}
+
+
+func mira_sparco_image(master, vis)
+  /* DOCUMENT mira_sparco_imageBB(master, vis);
+
+     Compute the total complex visibilities by adding a predefined image (im0)
+     the reconstructed image using the im0-to-total flux ratio (fim0) and
+     the Black Body temperatures of the two images (T0, Timg)
+     fim0 = fim0 * BB(T0, lambda) / BB(T0, lam0)
+     fd = (1-fim0) * BB(Timg, lambda) / BB(Timg, lam0)
+     Vtot = fd*Vimg + fim0*Vimg0
+     Vtot /= fd +fim0
+
+     SEE ALSO: mira_sparco_star, mira_sparco_binary.
+   */
+{
+  local vis, vis_re, vis_im, vis_amp, vis_phi, fs0, denv, B;
+
+  vis_re = vis(1,..);
+  vis_im = vis(2,..);
+
+  plugin = mira_plugin(master);
+
+  fim0 = plugin.params(1);
+  T0 = plugin.params(2);
+  Tim = plugin.params(3);
+  w = mira_model_wave(master);
+  w0 = plugin.w0;
+  img0 = plugin.image;
+  BB = []; //TODO Find a function for blackbody
+
+
+  fim = fim0 * plugin.star_spectrum;
+  fd = (1-fim0) * _BB(Tim, w) / _BB(Tim, w0);
+  ftot = fim + fd;
+
+  Vimg0 = master.xform(img0);
+  Vimg0_re = Vimg0(1,..);
+  Vimg0_im = Vimg0(2,..);
+
+  vis_re = vis_re * fd + fim * Vim0_re;
+  vis_im = vis_im * fd + fim * Vim0_im;
+
+  vis_re /= ftot;
+  vis_im /= ftot;
+
+  vis = [vis_re, vis_im];
+  vis = transpose(vis);
+
+//  h_set, master, model_vis_re = vis_re, model_vis_im = vis_im, model_vis = vis;
+
+  return vis;
+};
+
+func add_keywords (master, fh)
+/* DOCUMENT add_keywords (master, fh);
+
+    This function adds the sparco plugin add_keywords
+    to the finale saved fits file.
+
+    SEE ALSO: add_extension.
+*/
+{
+  plugin = mira_plugin(master);
+
+  fits_set, fh, "SMODEL",  plugin.model,  "Model used in SPARCO";
+  fits_set, fh, "SWAVE0",  plugin.w0,  "Central wavelength (mum) for chromatism";
+  if (plugin.startype == "BB") {
+    fits_set, fh, "STTEMP",  plugin.startemp,  "Temperature of the star";
+  } else if (plugin.startype == "pow") {
+    fits_set, fh, "STINDE",  plugin.starindex,  "Spectral index of the star";
+  }
+
+}
+
+func add_extension (master, fh)
+/* DOCUMENT add_extension (master, fh);
+
+    This function adds the sparco plugin add_keywords
+    to the finale saved fits file.
+
+    SEE ALSO: add_keywords.
+*/
+{
+  plugin = mira_plugin(master);
+
+
+ //FIXME: add stellar spectrum if used by sparco
+ // fits_new_hdu, fh, "IMAGE", "SPARCO adds an extension";
+ // fits_write_array, fh, random(128,128);
+ // fits_pad_hdu, fh;
+
+}
+
+func _BB(lambda, T)
+    /* DOCUMENT _BB(lambda, T);
+
+       DESCRIPTION
+       Computatiof black body radiation function with a given temperature T
+       at a specific wavelength lambda.
+       (Inspired from yocoAstroBBodyLambda)
+
+       PARAMETERS
+       - lambda : wavelength (m)
+       - T      : temperature (K)
+
+       RETURN VALUES
+       Return the energy radiated (W/m2/m)
+    */
+{
+    local c, h, kb;
+    c = 2.99792453e8;
+    h = 6.626070040e-34;
+    kb = 1.38064852e-23;
+    mask = abs(h*c / (kb*T*lambda) ) > 700;
+    if(numberof(where(mask))==0)
+        flambda = 2*h*c^2 / lambda^5 / (exp(h*c / (kb*T*lambda)) - 1);
+    else
+    {
+        flambda = lambda;
+        flambda(where(mask)) = 0.0;
+        flambda(where(!mask)) = 2*h*c^2 / lambda^5 / (exp(h*c / (kb*T*lambda)) - 1);
+    }
+
+    return flambda;
+}

@@ -8,7 +8,7 @@ This plugin is designed to work with [MiRA2](https://github.com/emmt/MiRA) direc
 
 ## Installation
 
-Firs make sure [MiRA2](https://github.com/emmt/MiRA) is installed.
+First make sure [MiRA2](https://github.com/emmt/MiRA) is installed.
 
 Then go to the folder where you want the plugin to be installed and type:
 `git clone https://github.com/kluskaj/mira-sparco-multi`
@@ -39,7 +39,7 @@ add the following options to mira2:
 
 `-sparco_file` if at leats one `-sparco_spectrum=spectrum`, specify here the path and na;e to the ASCII files defining the spectrum of your objects (TO BE IMPLEMENTED).
 
-`-sparco_image` Specify here the fits file have the image of the models (TO BE IMPLEMENTED).
+`-sparco_image` Specify here the fits file with the image that will be used as a model (TO BE IMPLEMENTED).
 
 ## Implemented Models
 

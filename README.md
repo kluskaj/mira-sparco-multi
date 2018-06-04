@@ -40,7 +40,7 @@ add the following options to mira2:
 
 ## Implemented Models
 
-* **STAR:** It adds a point source.
+* **star:** It adds a point source.
 
 * **UD:** It adds a Uniform Disk.
 

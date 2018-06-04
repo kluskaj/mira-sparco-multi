@@ -10,8 +10,11 @@ This plugin is designed to work with [MiRA2](https://github.com/emmt/MiRA) direc
 
 Firs make sure [MiRA2](https://github.com/emmt/MiRA) is installed.
 
-Either install it by copying it to MIRA_HOME or use the option
-`-plugin=/the/path/to/the/plugin/mira2_plugin_sparcomulti.i`
+Then go to the folder where you want the plugin to be installed and type:
+`git clone https://github.com/kluskaj/mira-sparco-multi`
+
+Then, either install it by copying `mira2_plugin_sparcomulti.i` to MIRA_HOME or use the option
+`-plugin=/the/path/to/the/plugin/mira2_plugin_sparcomulti.i` when launching ymira
 
 
 ## Usage

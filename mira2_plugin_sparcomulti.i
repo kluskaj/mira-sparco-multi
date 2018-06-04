@@ -251,7 +251,9 @@ func tweak_visibilities (master, vis)
  index = plugin.index;
  temp = plugin.temp;
  file = plugin.file;
- nmods=plugin.nmods;
+ nmods = plugin.nmods;
+ shift = plugin.shift;
+ params = plugin.params;
 
  /* compute and store spectra */
  if (plugin.specinit) {
@@ -274,8 +276,7 @@ func tweak_visibilities (master, vis)
       spectra(,i) = readSpectrum(file(is), w);
      }
    h_set, plugin, spectra = spectra,
-                  spectruminit = 0n,
-                  caca=1;
+                  spectruminit = 0n;
  };
 
  /* Read the images */
@@ -294,16 +295,19 @@ func tweak_visibilities (master, vis)
    visibilities = array(double, 2, numberof(w), nmods)
    ip = 0;
    for (i=1; i<=nmods; ++i) {
+     is = (2*nmods)-1;
      if (model(i) == "star") {
-       visibilities(,,i) = mira_sparco_star(master, shift(i));
+       visibilities(,,i) = mira_sparco_star(master, shift(is:is+1));
      } else if (model(i) == "UD") {
        ip +=1;
-       visibilities(,,i) = mira_sparco_UD(master, shift(i), params(ip));
+       visibilities(,,i) = mira_sparco_UD(master, shift(is:is+1), params(ip));
      } else if (model(i) == "bg" ) {
        visibilities(,,i) = mira_sparco_bg(master);
      } else if (model(i) == "image") {
-       visibilities(,,i) = mira_sparco_image(master);
-     } else {throw, " %s not implemented yet.", model(i)};
+       visibilities(,,i) = mira_sparco_image(master, shift(is:is+1));
+     } else {
+       throw, " %s not implemented yet.", model(i)
+     };
    };
 
    h_set, plugin, visibilities=visibilities;
@@ -326,47 +330,24 @@ func tweak_gradient (master, grd)
 {
   plugin = mira_plugin(master);
   /* Gradient modification for SPARCO */
-  if (plugin.model == "star" | plugin.model == "UD" | plugin.model == "image") {
-    fs0 = plugin.params(1);
-    denv = plugin.params(2);
-    w = mira_model_wave(master);
-    w0 = plugin.w0;
+  spectra = plugin.spectra;
+  flux = plugin.flux;
+  nmods = plugin.nmods;
 
-    fs = fs0 * plugin.star_spectrum;
-    fd = (1.-fs0) * (w/w0)^denv;
-    ftot = fs + fd;
+  fimg0 = 1 - sum(flux);
+  ftot = fimg = fimg0 * spectra(,1);
+  for (i=1; i<=nmods; ++i) {
+    ftot += flux(i) * spectra(,i+1);
+  }
 
-    grd_re = grd(1,..);
-    grd_im = grd(2,..);
+  grd_re = grd(1,..);
+  grd_im = grd(2,..);
 
-    grd_re *= ftot / fd;
-    grd_im *= ftot / fd;
+  grd_re *= ftot / fimg;
+  grd_im *= ftot / fimg;
 
-    grd = [grd_re, grd_im];
-    grd = transpose(grd);
-
-  } else if ( plugin.model == "binary") {
-
-    fs0 = plugin.params(1);
-    denv = plugin.params(2);
-    fbin0 = plugin.params(3);
-    w = mira_model_wave(master);
-    w0 = plugin.w0;
-
-    fs = fs0 * plugin.star_spectrum;
-    fbin = fbin0 * (w/w0)^-4;
-    fd = (1-fs0-fbin0) * (w/w0)^denv;
-    ftot = fs + fd + fbin;
-
-    grd_re = grd(1,..);
-    grd_im = grd(2,..);
-
-    grd_re *= ftot / fd;
-    grd_im *= ftot / fd;
-
-    grd = [grd_re, grd_im];
-    grd = transpose(grd);
-  };
+  grd = [grd_re, grd_im];
+  grd = transpose(grd);
 
   return grd
 
@@ -383,7 +364,7 @@ func mira_sparco_vis (master, vis)
 {
   plugin = mira_plugin(master);
   spectra = plugin.spectra;
-  visibilities = plugin*visibilities;
+  visibilities = plugin.visibilities;
   flux = plugin.flux;
 
   fimg0 = 1 - sum(flux);
@@ -549,13 +530,8 @@ func add_keywords (master, fh)
 {
   plugin = mira_plugin(master);
 
-  fits_set, fh, "SMODEL",  plugin.model,  "Model used in SPARCO";
-  fits_set, fh, "SWAVE0",  plugin.w0,  "Central wavelength (mum) for chromatism";
-  if (plugin.startype == "BB") {
-    fits_set, fh, "STTEMP",  plugin.startemp,  "Temperature of the star";
-  } else if (plugin.startype == "pow") {
-    fits_set, fh, "STINDE",  plugin.starindex,  "Spectral index of the star";
-  }
+//  fits_set, fh, "SMODEL",  plugin.model,  "Model used in SPARCO";
+//  fits_set, fh, "SWAVE0",  plugin.w0,  "Central wavelength (mum) for chromatism";
 
 }
 

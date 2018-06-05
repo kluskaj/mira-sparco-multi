@@ -168,6 +168,7 @@ func parse_options(plugin, opt)
 
 h_set, plugin, model=sparco,
                params=params,
+               spectrum=spectrum,
                flux=flux,
                w0=w0,
                image=image,
@@ -181,7 +182,6 @@ h_set, plugin, model=sparco,
                nbg=nbg,
                nstar=nstar,
                nUD=nUD,
-               spectrum=spectrum,
                specinit=1n,
                imageinit=1n,
                visinit=1n;
@@ -528,9 +528,50 @@ func add_keywords (master, fh)
     SEE ALSO: add_extension.
 */
 {
-  plugin = mira_plugin(master);
 
-//  fits_set, fh, "SMODEL",  plugin.model,  "Model used in SPARCO";
+  plugin = mira_plugin(master);
+  nmods = plugin.nmods;
+  fits_set, fh, "SWAVE0",  plugin.w0,  "SPARCO: Central wavelength (m) for chromatism";
+  fits_set, fh, "SNMODS",  nmods,  "SPARCO: Number of models used in SPARCO";
+  ip = ii = it = 0;
+  im0 = 1-sum(plugin.flux);
+  fits_set, fh, "SFLU00",  im0,  "SPARCO: Flux ratio of the image";
+  fits_set, fh, "SPEC00", plugin.spectrum(1),  "SPARCO: spectrum associated with the reconstructed image";
+  if (plugin.spectrum(1)=="pow") {
+    ii+=1;
+    fits_set, fh, "SIDX00", plugin.index(ii),  "SPARCO: spectral index of the model";
+  } else if (plugin.spectrum(1)=="BB") {
+    it+=1;
+    fits_set, fh, "STEM00", plugin.temp(it),  "SPARCO: black body temperature of the model";
+  }
+  for (i=1; i<=nmods; ++i) {
+    modelid = swrite(format="SMOD%d", i);
+    fluxid = swrite(format="SFLU%d", i);
+    specid = swrite(format="SPEC%d", i);
+    indexid = swrite(format="SIDX%d", i);
+    tempid = swrite(format="STEM%d", i);
+    xid = swrite(format="SDEX%d", i);
+    yid = swrite(format="SDEY%d", i);
+    is = 2*i-1;
+    modelid = swrite(format="SMOD%d", i);
+    fits_set, fh, modelid,  plugin.model(i),  "SPARCO: Model used";
+    fits_set, fh, fluxid,  plugin.flux(i),  "SPARCO: Flux ratio of the model";
+    if (plugin.model(i)=="UD") {
+      ip += 1;
+      paramid = swrite(format="SPAR%d", i);
+      fits_set, fh, paramid,  plugin.params(ip),  "SPARCO: UD diameter (mas)";
+    }
+    fits_set, fh, specid, plugin.spectrum(i+1),  "SPARCO: spectrum associated with model";
+    if (plugin.spectrum(i+1)=="pow") {
+      ii += 1;
+      fits_set, fh, indexid, plugin.index(ii),  "SPARCO: spectral index of the model";
+    } else if (plugin.spectrum(i+1)=="BB") {
+      it+=1
+      fits_set, fh, tempid, plugin.temp(it),  "SPARCO: black body temperature of the model";
+    }
+    fits_set, fh, xid,  plugin.shift(is),  "SPARCO: RA shift of the model (mas)";
+    fits_set, fh, yid,  plugin.shift(is+1),  "SPARCO: DEC shift of the model (mas)";
+  }
 //  fits_set, fh, "SWAVE0",  plugin.w0,  "Central wavelength (mum) for chromatism";
 
 }

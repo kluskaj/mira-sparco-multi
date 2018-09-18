@@ -68,7 +68,6 @@ func parse_options(plugin, opt)
 */
 
 {
-  inform, "toto";
   local sparco, params, w0, image;
 
   h_set, opt, flags=opt.flags | MIRA_KEEP_WAVELENGTH;
@@ -104,7 +103,7 @@ func parse_options(plugin, opt)
     nbg   = numberof(where(sparco == "bg"));
     nimage = numberof(where(sparco == "image"));
 
-    if (nmods != nstar + nUD + nimage) {
+    if (nmods != nstar + nUD + nimage + nbg) {
       throw, "The list of names is not correct can only be one of: \"star\", \"UD\", \"bg\" or \"image\" ";
     }
 
@@ -112,16 +111,15 @@ func parse_options(plugin, opt)
     if (numberof(image) != nimage) {
       throw, "The same number of image files need to be specified than the number of image models (n= %i )", nimage;
     };
-
     if (numberof(shift) == 0 ) {
       inform, "All the models are centered at (0,0).";
       shift = array(0.0, (nmods-nbg)*2);
     } else if (numberof(shift) != 2*(nmods-nbg) | numberof(shift) != 2*nmods) {
       throw, "Each model (except bg) should have a specified the relative shift in the x and y direction w.r.t. to the reconstructed image";
-    } else if (numberof(shift) != 2*(nmods-nbg)) {
+    } else if (numberof(shift) == 2*(nmods-nbg)) {
       shift2 = [];
       for (i=1; i<=nmods; ++i) {
-        if (model(i) == "bg") {
+        if (sparco(i) == "bg") {
           grow, shift2, [0,0];
         } else {
           idx = 2*i-1;
@@ -206,10 +204,9 @@ func _get_spectrum(type, w, w0, index=, temp=, file=)
 */
 {
   local star;
-
   if (type == "pow") {
   star = (w/w0)^index;
-} else if (plugin.startype == "BB") {
+} else if (type == "BB") {
   star = _BB(w,temp)/_BB(w0,temp);
 } else {
   throw, "Spectrum not implemented yet";
@@ -295,7 +292,7 @@ func tweak_visibilities (master, vis)
    visibilities = array(double, 2, numberof(w), nmods)
    ip = 0;
    for (i=1; i<=nmods; ++i) {
-     is = (2*nmods)-1;
+     is = (2*i)-1;
      if (model(i) == "star") {
        visibilities(,,i) = mira_sparco_star(master, shift(is:is+1));
      } else if (model(i) == "UD") {
@@ -448,23 +445,23 @@ func mira_sparco_UD(master, shift, UD)
   v = mira_model_v(master)/w;
   xbin = shift(1) * MIRA_MAS;
   ybin = shift(2) * MIRA_MAS;
-  UD *= MIRA_MAS;
   B = abs(u,v);
 
   if (UD==0.) {
     V_UD = array(1., dimsof(u));
   } else {
+    UD *= MIRA_MAS;
     V_UD = 2*bessj1(pi * B * UD) / ( pi * B * UD);
-  }
+  };
   vis_re = V_UD * cos( -2*pi*(xbin*u + ybin*v) );
-  vis_im = V_UD * sin( -2*pi*(xbin*u + ybin*v) );
+  vis_im = sin( -2*pi*(xbin*u + ybin*v) );
 
   vis = [vis_re, vis_im];
   vis = transpose(vis);
 
   return vis;
 
-}
+};
 
 
 func mira_sparco_image(master, vis)

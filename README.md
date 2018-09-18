@@ -27,7 +27,7 @@ add the following options to mira2:
 
 `-sparco_w0=`         central wavelengths where the flux ratios are effective
 
-`-sparco_spectrum=`  Type of spectral behaviour for **the reconstructed image and model(s)**. Can be either: `pow` for a power law, `BB` for a blackbody or `spectrum` for a spectrum specified in an ascii file (TO BE IMPLEMENTED).
+`-sparco_spectrum=`  Type of spectral behaviour for **the reconstructed image and model(s)**. **Always put the spectrum for the image first!** Can be either: `pow` for a power law, `BB` for a blackbody or `spectrum` for a spectrum specified in an ascii file (TO BE IMPLEMENTED).
 
 `-sparco_index=` if at least one `sparco_spectrum` is a `pow` then you have to specify the spectral index list here
 

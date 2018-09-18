@@ -262,19 +262,16 @@ func tweak_visibilities (master, vis)
    for (i=1; i<=plugin.nmods+1; ++i) {
      if (spectrum(i) == "pow") {
        ii +=1
-       spectra(,i) = _get_spectrum(spectrum(i), w, w0,
-        index=index(ii));
+       spectra(,i) = _get_spectrum(spectrum(i), w, w0, index=index(ii));
      } else if (spectrum(i) == "BB") {
        it +=1;
-       spectra(,i) = _get_spectrum(spectrum(i), w, w0,
-       temp=temp(it));
+       spectra(,i) = _get_spectrum(spectrum(i), w, w0, temp=temp(it));
      } else {
       is +=1;
       spectra(,i) = readSpectrum(file(is), w);
-     }
-   h_set, plugin, spectra = spectra,
-                  spectruminit = 0n;
+    };
  };
+ h_set, plugin, spectra = spectra, specinit = 0n;
 
  /* Read the images */
  if (plugin.nimages>0 & plugin.imageinit) {
@@ -307,7 +304,7 @@ func tweak_visibilities (master, vis)
      };
    };
 
-   h_set, plugin, visibilities=visibilities;
+   h_set, plugin, visibilities=visibilities,
                   visinit=0n;
  }
 

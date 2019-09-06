@@ -46,7 +46,7 @@ func mira_plugin_sparcomulti_init(nil) {
                 tweak_gradient=tweak_gradient,
                 add_keywords=add_keywords,
                 add_extensions=add_extensions
-                  );
+                 );
 
   return plugin;
 }

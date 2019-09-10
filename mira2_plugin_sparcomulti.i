@@ -15,7 +15,7 @@ func mira_plugin_sparcomulti_init(nil) {
   command line.
   */
 
-  inform, "Loading \"sparco\" plugin...";
+  inform, "Loading \"sparcomulti\" plugin...";
 
   SPARCO_options = _lst("\nSparco specific options",
     _lst("sparco_model", "star", "NAME", OPT_STRING_LIST,
@@ -45,7 +45,8 @@ func mira_plugin_sparcomulti_init(nil) {
                 tweak_visibilities=tweak_visibilities,
                 tweak_gradient=tweak_gradient,
                 add_keywords=add_keywords,
-                add_extensions=add_extensions
+                add_extensions=add_extensions,
+                read_keywords=read_keywords
                  );
 
   return plugin;
@@ -76,32 +77,34 @@ func parse_options(plugin, opt)
   h_set, opt, an_option=my_needed_value;
 
   /* Read SPARCO settings */
-  sparco = opt.sparco_model;
+  sparco = strupper(opt.sparco_model);
   params = opt.sparco_params;
   w0 = opt.sparco_w0;
   image = opt.sparco_image;
-  type = opt.sparco_type;
+  type =   opt.sparco_type;
   file = opt.sparco_file;
   temp = opt.sparco_temp;
   index = opt.sparco_index;
   shift = opt.sparco_xy;
   flux = opt.sparco_flux;
-  spectrum = opt.sparco_spectrum;
-
+  spectrum = strupper(opt.sparco_spectrum);
+  
   if ( !is_void(w0) ) {
-    w0 *= 1e-6;
+    if(w0>0.1){ // assume it is micron
+      w0 *= 1e-6; 
+    }
   };
-
+  
   // FIXME: continue to modify here !!!!!!!!
-
+  
   if (!is_void(sparco)) {
-
+    
     /* How many models? */
     nmods = numberof(sparco);
-    nstar = numberof(where(sparco == "star"));
+    nstar = numberof(where(sparco == "STAR"));
     nUD   = numberof(where(sparco == "UD"));
-    nbg   = numberof(where(sparco == "bg"));
-    nimage = numberof(where(sparco == "image"));
+    nbg   = numberof(where(sparco == "BG"));
+    nimage = numberof(where(sparco == "IMAGE"));
 
     if (nmods != nstar + nUD + nimage + nbg) {
       throw, "The list of names is not correct can only be one of: \"star\", \"UD\", \"bg\" or \"image\" ";
@@ -119,7 +122,7 @@ func parse_options(plugin, opt)
     } else if (numberof(shift) == 2*(nmods-nbg)) {
       shift2 = [];
       for (i=1; i<=nmods; ++i) {
-        if (sparco(i) == "bg") {
+        if (sparco(i) == "BG") {
           grow, shift2, [0,0];
         } else {
           idx = 2*i-1;
@@ -136,7 +139,7 @@ func parse_options(plugin, opt)
     if (sum(flux) >= 1 | sum(flux) < 0) {
       throw, "The sum of the relative fluxes should be lower than one and positive (currently %f)", sum(flux);
     }
-
+    
     if (numberof(spectrum) != nmods+1 ) {
       throw, "Each model and the reconstrcuted image should have a relative spectrum. It can be either \"pow\", \"BB\" or \"spectrum\" "
     }
@@ -204,7 +207,7 @@ func _get_spectrum(type, w, w0, index=, temp=, file=)
 */
 {
   local star;
-  if (type == "pow") {
+  if (type == "POW") {
   star = (w/w0)^index;
 } else if (type == "BB") {
   star = _BB(w,temp)/_BB(w0,temp);
@@ -260,7 +263,7 @@ func tweak_visibilities (master, vis)
    spectra = array(double, nw, nmods+1);
    ii = it = is = 0;
    for (i=1; i<=plugin.nmods+1; ++i) {
-     if (spectrum(i) == "pow") {
+     if (spectrum(i) == "POW") {
        ii +=1
        spectra(,i) = _get_spectrum(spectrum(i), w, w0, index=index(ii));
      } else if (spectrum(i) == "BB") {
@@ -290,14 +293,14 @@ func tweak_visibilities (master, vis)
    ip = 0;
    for (i=1; i<=nmods; ++i) {
      is = (2*i)-1;
-     if (model(i) == "star") {
+     if (model(i) == "STAR") {
        visibilities(,,i) = mira_sparco_star(master, shift(is:is+1));
      } else if (model(i) == "UD") {
        ip +=1;
        visibilities(,,i) = mira_sparco_UD(master, shift(is:is+1), params(ip));
-     } else if (model(i) == "bg" ) {
+     } else if (model(i) == "BG" ) {
        visibilities(,,i) = mira_sparco_bg(master);
-     } else if (model(i) == "image") {
+     } else if (model(i) == "IMAGE") {
        visibilities(,,i) = mira_sparco_image(master, shift(is:is+1));
      } else {
        throw, " %s not implemented yet.", model(i)
@@ -360,7 +363,8 @@ func mira_sparco_vis (master, vis)
   spectra = plugin.spectra;
   visibilities = plugin.visibilities;
   flux = plugin.flux;
-
+  
+  
   fimg0 = 1 - sum(flux);
   ftot = fimg = fimg0 * spectra(,1);
 
@@ -481,7 +485,6 @@ func mira_sparco_image(master, vis)
   vis_im = vis(2,..);
 
   plugin = mira_plugin(master);
-
   fim0 = plugin.params(1);
   T0 = plugin.params(2);
   Tim = plugin.params(3);
@@ -513,81 +516,8 @@ func mira_sparco_image(master, vis)
   return vis;
 };
 
-func add_keywords (master, fh)
-/* DOCUMENT add_keywords (master, fh);
-
-    This function adds the sparco plugin add_keywords
-    to the finale saved fits file.
-
-    SEE ALSO: add_extension.
-*/
-{
-
-  plugin = mira_plugin(master);
-  nmods = plugin.nmods;
-  fits_set, fh, "SWAVE0",  plugin.w0,  "SPARCO: Central wavelength (m) for chromatism";
-  fits_set, fh, "SNMODS",  nmods,  "SPARCO: Number of models used in SPARCO";
-  ip = ii = it = 0;
-  im0 = 1-sum(plugin.flux);
-  fits_set, fh, "SFLU00",  im0,  "SPARCO: Flux ratio of the image";
-  fits_set, fh, "SPEC00", plugin.spectrum(1),  "SPARCO: spectrum associated with the reconstructed image";
-  if (plugin.spectrum(1)=="pow") {
-    ii+=1;
-    fits_set, fh, "SIDX00", plugin.index(ii),  "SPARCO: spectral index of the model";
-  } else if (plugin.spectrum(1)=="BB") {
-    it+=1;
-    fits_set, fh, "STEM00", plugin.temp(it),  "SPARCO: black body temperature of the model";
-  }
-  for (i=1; i<=nmods; ++i) {
-    modelid = swrite(format="SMOD%d", i);
-    fluxid = swrite(format="SFLU%d", i);
-    specid = swrite(format="SPEC%d", i);
-    indexid = swrite(format="SIDX%d", i);
-    tempid = swrite(format="STEM%d", i);
-    xid = swrite(format="SDEX%d", i);
-    yid = swrite(format="SDEY%d", i);
-    is = 2*i-1;
-    modelid = swrite(format="SMOD%d", i);
-    fits_set, fh, modelid,  plugin.model(i),  "SPARCO: Model used";
-    fits_set, fh, fluxid,  plugin.flux(i),  "SPARCO: Flux ratio of the model";
-    if (plugin.model(i)=="UD") {
-      ip += 1;
-      paramid = swrite(format="SPAR%d", i);
-      fits_set, fh, paramid,  plugin.params(ip),  "SPARCO: UD diameter (mas)";
-    }
-    fits_set, fh, specid, plugin.spectrum(i+1),  "SPARCO: spectrum associated with model";
-    if (plugin.spectrum(i+1)=="pow") {
-      ii += 1;
-      fits_set, fh, indexid, plugin.index(ii),  "SPARCO: spectral index of the model";
-    } else if (plugin.spectrum(i+1)=="BB") {
-      it+=1
-      fits_set, fh, tempid, plugin.temp(it),  "SPARCO: black body temperature of the model";
-    }
-    fits_set, fh, xid,  plugin.shift(is),  "SPARCO: RA shift of the model (mas)";
-    fits_set, fh, yid,  plugin.shift(is+1),  "SPARCO: DEC shift of the model (mas)";
-  }
-//  fits_set, fh, "SWAVE0",  plugin.w0,  "Central wavelength (mum) for chromatism";
-
-}
-
-func add_extension (master, fh)
-/* DOCUMENT add_extension (master, fh);
-
-    This function adds the sparco plugin add_keywords
-    to the finale saved fits file.
-
-    SEE ALSO: add_keywords.
-*/
-{
-  plugin = mira_plugin(master);
 
 
- //FIXME: add stellar spectrum if used by sparco
- // fits_new_hdu, fh, "IMAGE", "SPARCO adds an extension";
- // fits_write_array, fh, random(128,128);
- // fits_pad_hdu, fh;
-
-}
 
 func _BB(lambda, T)
     /* DOCUMENT _BB(lambda, T);
@@ -620,4 +550,123 @@ func _BB(lambda, T)
     }
 
     return flambda;
+}
+
+func add_keywords (master, fh)
+/* DOCUMENT add_keywords (master, fh);
+
+    This function adds the sparco plugin add_keywords
+    to the finale saved fits file.
+
+    SEE ALSO: add_extension.
+*/
+{
+
+  plugin = mira_plugin(master);
+  nmods = plugin.nmods;
+  fits_set, fh, "SWAVE0",  plugin.w0,  "SPARCO: Central wavelength (m) for chromatism";
+  fits_set, fh, "SNMODS",  nmods,  "SPARCO: Number of models used in SPARCO";
+  ip = ii = it = 0;
+  im0 = 1-sum(plugin.flux);
+  fits_set, fh, "SFLU0",  im0,  "SPARCO: Flux ratio of the image";
+  fits_set, fh, "SPEC0", plugin.spectrum(1),  "SPARCO: spectrum associated with the reconstructed image";
+  if (plugin.spectrum(1)=="POW") {
+    ii+=1;
+    fits_set, fh, "SIDX0", plugin.index(ii),  "SPARCO: spectral index of the model";
+  } else if (plugin.spectrum(1)=="BB") {
+    it+=1;
+    fits_set, fh, "STEM0", plugin.temp(it),  "SPARCO: black body temperature of the model";
+  }
+  for (i=1; i<=nmods; ++i) {
+    modelid = swrite(format="SMOD%d", i);
+    fluxid = swrite(format="SFLU%d", i);
+    specid = swrite(format="SPEC%d", i);
+    indexid = swrite(format="SIDX%d", i);
+    tempid = swrite(format="STEM%d", i);
+    xid = swrite(format="SDEX%d", i);
+    yid = swrite(format="SDEY%d", i);
+    is = 2*i-1;
+    modelid = swrite(format="SMOD%d", i);
+    fits_set, fh, modelid,  plugin.model(i),  "SPARCO: Model used";
+    fits_set, fh, fluxid,  plugin.flux(i),  "SPARCO: Flux ratio of the model";
+    if (plugin.model(i)=="UD") {
+      ip += 1;
+      paramid = swrite(format="SPAR%d", i);
+      fits_set, fh, paramid,  plugin.params(ip),  "SPARCO: UD diameter (mas)";
+    }
+    fits_set, fh, specid, plugin.spectrum(i+1),  "SPARCO: spectrum associated with model";
+    if (strupper(plugin.spectrum(i+1))=="POW") {
+      ii += 1;
+      fits_set, fh, indexid, plugin.index(ii),  "SPARCO: spectral index of the model";
+    } else if (plugin.spectrum(i+1)=="BB") {
+      it+=1
+      fits_set, fh, tempid, plugin.temp(it),  "SPARCO: black body temperature of the model";
+    }
+    fits_set, fh, xid,  plugin.shift(is),  "SPARCO: RA shift of the model (mas)";
+    fits_set, fh, yid,  plugin.shift(is+1),  "SPARCO: DEC shift of the model (mas)";
+  }
+//  fits_set, fh, "SWAVE0",  plugin.w0,  "Central wavelength (mum) for chromatism";
+
+}
+
+func add_extension (master, fh)
+/* DOCUMENT add_extension (master, fh);
+
+    This function adds the sparco plugin add_keywords
+    to the finale saved fits file.
+
+    SEE ALSO: add_keywords.
+*/
+{
+  plugin = mira_plugin(master);
+
+
+ //FIXME: add stellar spectrum if used by sparco
+ // fits_new_hdu, fh, "IMAGE", "SPARCO adds an extension";
+ // fits_write_array, fh, random(128,128);
+ // fits_pad_hdu, fh;
+
+}
+
+
+func read_keywords (tab, fh)
+/* DOCUMENT read_keywords (master, fh);
+
+    This function reads sparco plugin keywords
+    to the finale saved fits file.
+    SEE ALSO: write_keyword.
+*/
+{
+
+  nmods            = mira_get_fits_real(     fh, "SNMODS");
+  h_set, tab,  sparco_w0 = mira_get_fits_real(   fh, "SWAVE0");
+
+  for (i=0; i<=nmods; ++i) {
+    sparco_spectrum_i =  mira_get_fits_string(fh, swrite(format="SPEC%d", i));
+    sparco_spectrum =  _(sparco_spectrum,sparco_spectrum_i);
+
+    if (sparco_spectrum_i =="POW") {
+      sparco_index = _(sparco_index, mira_get_fits_real(fh, swrite(format="SIDX%d", i)));
+    }else if (sparco_spectrum_i  =="BB") {
+      sparco_temp = _(sparco_temp, mira_get_fits_real(fh, swrite(format="STEM%d", i)));
+    }
+
+    if(i>0){
+      sparco_flux = _(sparco_flux, mira_get_fits_real(fh, swrite(format="SFLU%d", i)));
+      sparco_model_i = mira_get_fits_string(fh, swrite(format="SMOD%d", i));
+      if (sparco_model_i=="UD") {
+        sparco_params = _(sparco_params, mira_get_fits_real(fh, swrite(format="SPAR%d", i)));
+      }
+      sparco_model=  _(sparco_model,sparco_model_i );
+      sparco_xy= _(sparco_xy, mira_get_fits_real(fh, swrite(format="SDEX%d", i)),mira_get_fits_real(fh, swrite(format="SDEY%d", i)));
+    }
+  }
+  h_set, tab, sparco_flux=sparco_flux,
+    sparco_model=sparco_model,
+    sparco_xy =sparco_xy,
+    sparco_spectrum=sparco_spectrum,
+    sparco_index=sparco_index,
+    sparco_temp=sparco_temp,
+    sparco_params = sparco_params ;
+  return tab;
 }

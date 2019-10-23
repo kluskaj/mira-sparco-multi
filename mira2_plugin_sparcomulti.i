@@ -149,6 +149,9 @@ func parse_options(plugin, opt)
       throw, "Each model and the reconstrcuted image should have a relative spectrum. It can be either \"pow\", \"BB\" or \"spectrum\" "
     }
 
+    print("n params: ", numberof(params));
+    print("nUD: ", nUD);
+
     if (numberof(params) != nUD ) {
       throw, "The number of parameters does not match the number of \"UD\" models";
     }
@@ -641,15 +644,15 @@ func read_keywords (tab, fh)
 {
   inform, "read_keywords() \"sparcomulti\" ...";
 
-  nmods                  = mira_get_fits_integer(fh, "SNMODS");
-  h_set, tab,  sparco_w0 = mira_get_fits_real(   fh, "SWAVE0");
+  nmods     = mira_get_fits_integer(fh, "SNMODS");
+  sparco_w0 = mira_get_fits_real(   fh, "SWAVE0");
 
   if (is_void(nmods)) {
     nmods = 0;
   }
   for (i=0; i<=nmods; ++i) {
     sparco_spectrum_i =  mira_get_fits_string(fh, swrite(format="SPEC%d", i));
-    sparco_spectrum =  _(sparco_spectrum,sparco_spectrum_i);
+    sparco_spectrum = _(sparco_spectrum,sparco_spectrum_i);
 
     if (sparco_spectrum_i =="POW") {
       sparco_index = _(sparco_index, mira_get_fits_real(fh, swrite(format="SIDX%d", i)));
@@ -663,10 +666,20 @@ func read_keywords (tab, fh)
       if (sparco_model_i=="UD") {
         sparco_params = _(sparco_params, mira_get_fits_real(fh, swrite(format="SPAR%d", i)));
       }
-      sparco_model=  _(sparco_model,sparco_model_i );
+      sparco_model= _(sparco_model,sparco_model_i);
       sparco_xy= _(sparco_xy, mira_get_fits_real(fh, swrite(format="SDEX%d", i)), mira_get_fits_real(fh, swrite(format="SDEY%d", i)));
     }
   }
+
+  print("sparco_w0 :", sparco_w0);
+  print("sparco_flux :", sparco_flux);
+  print("sparco_model :", sparco_model);
+  print("sparco_xy :", sparco_xy);
+  print("sparco_spectrum :", sparco_spectrum);
+  print("sparco_index :", sparco_index);
+  print("sparco_temp :", sparco_temp);
+  print("sparco_params :", sparco_params);
+
   /* Set SPARCO settings */
   h_set, tab, sparco_w0=sparco_w0,
     sparco_flux=sparco_flux,
@@ -675,7 +688,7 @@ func read_keywords (tab, fh)
     sparco_spectrum=sparco_spectrum,
     sparco_index=sparco_index,
     sparco_temp=sparco_temp,
-    sparco_params = sparco_params ;
+    sparco_params=sparco_params ;
 
   inform, "read_keywords() \"sparcomulti\" done.";
 

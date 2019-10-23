@@ -17,8 +17,9 @@ func mira_plugin_sparcomulti_init(nil) {
 
   inform, "Loading \"sparcomulti\" plugin...";
 
+/* note: sparco_model = "star" default value discarded: it corrupts sparco model (from read_keywords) */
   SPARCO_options = _lst("\nSparco specific options",
-    _lst("sparco_model", "star", "NAME", OPT_STRING_LIST,
+    _lst("sparco_model", [], "NAME", OPT_STRING_LIST,
          "Name of the SPARCO model used"),
     _lst("sparco_params", [], "VALUES", OPT_REAL_LIST,
          "Parameters used with SPARCO"),
@@ -104,12 +105,30 @@ func parse_options(plugin, opt)
       }
     }
 
+if (opt.debug) {
+  print("sparco :", sparco);
+  print("params :", params);
+  print("w0 :", w0);
+  print("temp :", temp);
+  print("index :", index);
+  print("shift :", shift);
+  print("flux :", flux);
+  print("spectrum :", spectrum);
+}
+
     /* How many models? */
     nmods = numberof(sparco);
     nstar = numberof(where(sparco == "STAR"));
     nUD   = numberof(where(sparco == "UD"));
     nbg   = numberof(where(sparco == "BG"));
     nimage = numberof(where(sparco == "IMAGE"));
+
+if (opt.debug) {
+  print("nmods :", nmods);
+  print("nstar :", nstar);
+  print("nUD :", nUD);
+  print("nbg :", nbg);
+}
 
     if (nmods != nstar + nUD + nimage + nbg) {
       throw, "The list of names is not correct can only be one of: \"star\", \"UD\", \"bg\" or \"image\" ";
@@ -144,13 +163,10 @@ func parse_options(plugin, opt)
     if (sum(flux) >= 1 | sum(flux) < 0) {
       throw, "The sum of the relative fluxes should be lower than one and positive (currently %f)", sum(flux);
     }
-    
+
     if (numberof(spectrum) != nmods+1 ) {
       throw, "Each model and the reconstrcuted image should have a relative spectrum. It can be either \"pow\", \"BB\" or \"spectrum\" "
     }
-
-    print("n params: ", numberof(params));
-    print("nUD: ", nUD);
 
     if (numberof(params) != nUD ) {
       throw, "The number of parameters does not match the number of \"UD\" models";
@@ -671,6 +687,7 @@ func read_keywords (tab, fh)
     }
   }
 
+if (0) {
   print("sparco_w0 :", sparco_w0);
   print("sparco_flux :", sparco_flux);
   print("sparco_model :", sparco_model);
@@ -679,6 +696,7 @@ func read_keywords (tab, fh)
   print("sparco_index :", sparco_index);
   print("sparco_temp :", sparco_temp);
   print("sparco_params :", sparco_params);
+}
 
   /* Set SPARCO settings */
   h_set, tab, sparco_w0=sparco_w0,

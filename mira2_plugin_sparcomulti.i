@@ -141,7 +141,7 @@ if (opt.debug) {
     if (numberof(shift) == 0) {
       inform, "All the models are centered at (0,0).";
       shift = array(0.0, (nmods-nbg)*2);
-    } else if (numberof(shift) != 2*(nmods-nbg) | numberof(shift) != 2*nmods) {
+    } else if (numberof(shift) != 2*(nmods-nbg) & numberof(shift) != 2*nmods) {
       throw, "Each model (except bg) should have a specified the relative shift in the x and y direction w.r.t. to the reconstructed image";
     } else if (numberof(shift) == 2*(nmods-nbg)) {
       shift2 = [];
@@ -679,11 +679,16 @@ func read_keywords (tab, fh)
     if(i>0){
       sparco_flux = _(sparco_flux, mira_get_fits_real(fh, swrite(format="SFLU%d", i)));
       sparco_model_i = mira_get_fits_string(fh, swrite(format="SMOD%d", i));
-      if (sparco_model_i=="UD") {
+      sparco_model= _(sparco_model,sparco_model_i);
+
+      if (sparco_model_i == "UD") {
         sparco_params = _(sparco_params, mira_get_fits_real(fh, swrite(format="SPAR%d", i)));
       }
-      sparco_model= _(sparco_model,sparco_model_i);
-      sparco_xy= _(sparco_xy, mira_get_fits_real(fh, swrite(format="SDEX%d", i)), mira_get_fits_real(fh, swrite(format="SDEY%d", i)));
+      if (sparco_model_i == "BG") {
+        sparco_xy= _(sparco_xy, 0, 0);
+      } else {
+        sparco_xy= _(sparco_xy, mira_get_fits_real(fh, swrite(format="SDEX%d", i)), mira_get_fits_real(fh, swrite(format="SDEY%d", i)));
+      }
     }
   }
 

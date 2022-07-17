@@ -17,15 +17,16 @@ func mira_plugin_sparcomulti_init(nil) {
 
   inform, "Loading \"sparcomulti\" plugin...";
 
+/* note: sparco_model = "star" default value discarded: it corrupts sparco model (from read_keywords) */
   SPARCO_options = _lst("\nSparco specific options",
-    _lst("sparco_model", "star", "NAME", OPT_STRING_LIST,
+    _lst("sparco_model", [], "NAME", OPT_STRING_LIST,
          "Name of the SPARCO model used"),
     _lst("sparco_params", [], "VALUES", OPT_REAL_LIST,
          "Parameters used with SPARCO"),
     _lst("sparco_w0", [], "VALUE", OPT_REAL,
          "Central wavelength (in microns) for SPARCO"),
     _lst("sparco_image", [], "NAME", OPT_STRING,
-         "Name of the fits file that are needed if i;age types specified"),
+         "Name of the fits file that are needed if image types specified"),
     _lst("sparco_spectrum", [], "NAME", OPT_STRING_LIST,
          "Type of spectrum that model has/have"),
     _lst("sparco_file", [], "NAME", OPT_STRING_LIST,
@@ -49,6 +50,8 @@ func mira_plugin_sparcomulti_init(nil) {
                 read_keywords=read_keywords
                  );
 
+  inform, "Plugin \"sparcomulti\" ready.";
+
   return plugin;
 }
 
@@ -71,13 +74,12 @@ func parse_options(plugin, opt)
 {
   local sparco, params, w0, image;
 
+  inform, "parse_options() \"sparcomulti\" ...";
+
   h_set, opt, flags=opt.flags | MIRA_KEEP_WAVELENGTH;
 
-  /* Modify options if needed, for example xmin xmax
-  h_set, opt, an_option=my_needed_value;
-
   /* Read SPARCO settings */
-  sparco = strupper(opt.sparco_model);
+  sparco = opt.sparco_model;
   params = opt.sparco_params;
   w0 = opt.sparco_w0;
   image = opt.sparco_image;
@@ -87,24 +89,46 @@ func parse_options(plugin, opt)
   index = opt.sparco_index;
   shift = opt.sparco_xy;
   flux = opt.sparco_flux;
-  spectrum = strupper(opt.sparco_spectrum);
-  
-  if ( !is_void(w0) ) {
-    if(w0>0.1){ // assume it is micron
-      w0 *= 1e-6; 
-    }
-  };
-  
-  // FIXME: continue to modify here !!!!!!!!
-  
+  spectrum = opt.sparco_spectrum;
+
   if (!is_void(sparco)) {
-    
+    /* use upper case */
+    sparco = strupper(sparco);
+
+    if (!is_void(spectrum)) {
+      spectrum = strupper(spectrum);
+    }
+
+    if (!is_void(w0)) {
+      if (w0 > 0.1) { // assume it is micron
+        w0 *= 1e-6;
+      }
+    }
+
+if (opt.debug) {
+  print("sparco :", sparco);
+  print("params :", params);
+  print("w0 :", w0);
+  print("temp :", temp);
+  print("index :", index);
+  print("shift :", shift);
+  print("flux :", flux);
+  print("spectrum :", spectrum);
+}
+
     /* How many models? */
     nmods = numberof(sparco);
     nstar = numberof(where(sparco == "STAR"));
     nUD   = numberof(where(sparco == "UD"));
     nbg   = numberof(where(sparco == "BG"));
     nimage = numberof(where(sparco == "IMAGE"));
+
+if (opt.debug) {
+  print("nmods :", nmods);
+  print("nstar :", nstar);
+  print("nUD :", nUD);
+  print("nbg :", nbg);
+}
 
     if (nmods != nstar + nUD + nimage + nbg) {
       throw, "The list of names is not correct can only be one of: \"star\", \"UD\", \"bg\" or \"image\" ";
@@ -113,11 +137,11 @@ func parse_options(plugin, opt)
     /* Test the right number of parameters given the models */
     if (numberof(image) != nimage) {
       throw, "The same number of image files need to be specified than the number of image models (n= %i )", nimage;
-    };
-    if (numberof(shift) == 0 ) {
+    }
+    if (numberof(shift) == 0) {
       inform, "All the models are centered at (0,0).";
       shift = array(0.0, (nmods-nbg)*2);
-    } else if (numberof(shift) != 2*(nmods-nbg) | numberof(shift) != 2*nmods) {
+    } else if (numberof(shift) != 2*(nmods-nbg) & numberof(shift) != 2*nmods) {
       throw, "Each model (except bg) should have a specified the relative shift in the x and y direction w.r.t. to the reconstructed image";
     } else if (numberof(shift) == 2*(nmods-nbg)) {
       shift2 = [];
@@ -128,18 +152,18 @@ func parse_options(plugin, opt)
           idx = 2*i-1;
           grow, shift2, shift(idx:idx+1);
         }
-      };
+      }
       shift = shift2;
-    };
+    }
 
-    if (numberof(flux) != nmods ) {
+    if (numberof(flux) != nmods) {
       throw, "Each model should have its flux ratio. The flux ratio of the reconstructed image will be 1-f_models."
     }
 
     if (sum(flux) >= 1 | sum(flux) < 0) {
       throw, "The sum of the relative fluxes should be lower than one and positive (currently %f)", sum(flux);
     }
-    
+
     if (numberof(spectrum) != nmods+1 ) {
       throw, "Each model and the reconstrcuted image should have a relative spectrum. It can be either \"pow\", \"BB\" or \"spectrum\" "
     }
@@ -152,42 +176,43 @@ func parse_options(plugin, opt)
     for (i=1; i<=nmods; ++i) {
       if (flux(i) < 0) {
         throw, "fluxes should be positive (negative fluxes not implemented)";
-      };
+      }
       if (sparco(i) == "UD") {
         p += 1;
         if (params(p) <= 0) {
           throw, "The UD diameter should be positive";
-        };
+        }
         inform, "Model %i is a %s with a %f mas diameter, with a flux ratio of %f and a %s spectrum.", i, sparco(i), params(p), flux(i), spectrum(i+1) ;
       } else {
         inform, "Model %i is a %s, with a flux ratio of %f and a %s spectrum.", i, sparco(i), flux(i), spectrum(i+1) ;
-      };
-    };
+      }
+    }
   } else {
     throw, "no models specified...";
-  };
+  }
 
-h_set, plugin, model=sparco,
-               params=params,
-               spectrum=spectrum,
-               flux=flux,
-               w0=w0,
-               image=image,
-               index=index,
-               temp=temp,
-               file=file,
-               shift=shift,
-               type=type,
-               nmods=nmods,
-               nimages=nimage,
-               nbg=nbg,
-               nstar=nstar,
-               nUD=nUD,
-               specinit=1n,
-               imageinit=1n,
-               visinit=1n;
+  h_set, plugin, model=sparco,
+                 params=params,
+                 spectrum=spectrum,
+                 flux=flux,
+                 w0=w0,
+                 image=image,
+                 index=index,
+                 temp=temp,
+                 file=file,
+                 shift=shift,
+                 type=type,
+                 nmods=nmods,
+                 nimages=nimage,
+                 nbg=nbg,
+                 nstar=nstar,
+                 nUD=nUD,
+                 specinit=1n,
+                 imageinit=1n,
+                 visinit=1n;
 
-};
+  inform, "parse_options() \"sparcomulti\" done.";
+}
 
 func _get_spectrum(type, w, w0, index=, temp=, file=)
 /* DOCUMENT _get_spectrum(type, w, w0, index=, temp=, file=);
@@ -208,15 +233,15 @@ func _get_spectrum(type, w, w0, index=, temp=, file=)
 {
   local star;
   if (type == "POW") {
-  star = (w/w0)^index;
-} else if (type == "BB") {
-  star = _BB(w,temp)/_BB(w0,temp);
-} else {
-  throw, "Spectrum not implemented yet";
-}
+    star = (w/w0)^index;
+  } else if (type == "BB") {
+    star = _BB(w,temp)/_BB(w0,temp);
+  } else {
+    throw, "Spectrum not implemented yet";
+  }
 
   return star
-};
+}
 
 func readSpectrum(file, w)
 /* DOCUMENT readSpectrum(master, file);
@@ -272,8 +297,8 @@ func tweak_visibilities (master, vis)
      } else {
       is +=1;
       spectra(,i) = readSpectrum(file(is), w);
-    };
- };
+    }
+ }
  h_set, plugin, spectra = spectra, specinit = 0n;
 
  /* Read the images */
@@ -283,8 +308,8 @@ func tweak_visibilities (master, vis)
    throw, "model made of image wait for Jacques to implement it..."
    h_set, plugin, images=images;
                   imageinit=0n;
-   };
- };
+   }
+ }
 
  /* Compute the model complex visibilities */
  if (plugin.visinit) {
@@ -304,8 +329,8 @@ func tweak_visibilities (master, vis)
        visibilities(,,i) = mira_sparco_image(master, shift(is:is+1));
      } else {
        throw, " %s not implemented yet.", model(i)
-     };
-   };
+     }
+   }
 
    h_set, plugin, visibilities=visibilities,
                   visinit=0n;
@@ -313,7 +338,7 @@ func tweak_visibilities (master, vis)
 
  vis = mira_sparco_vis(master, vis);
 
-return vis;
+ return vis;
 }
 
 func tweak_gradient (master, grd)
@@ -346,8 +371,7 @@ func tweak_gradient (master, grd)
   grd = [grd_re, grd_im];
   grd = transpose(grd);
 
-  return grd
-
+  return grd;
 }
 
 
@@ -363,8 +387,8 @@ func mira_sparco_vis (master, vis)
   spectra = plugin.spectra;
   visibilities = plugin.visibilities;
   flux = plugin.flux;
-  
-  
+
+
   fimg0 = 1 - sum(flux);
   ftot = fimg = fimg0 * spectra(,1);
 
@@ -384,8 +408,7 @@ func mira_sparco_vis (master, vis)
   vis = transpose(vis);
 
   return vis;
-
-};
+}
 
 
 func mira_sparco_star(master, shift)
@@ -410,7 +433,7 @@ func mira_sparco_star(master, shift)
   vis = transpose(vis);
 
   return vis;
-};
+}
 
 func mira_sparco_bg(master)
   /* DOCUMENT mira_sparco_bg(master);
@@ -429,7 +452,7 @@ func mira_sparco_bg(master)
   vis = transpose(vis);
 
   return vis;
-};
+}
 
 
 func mira_sparco_UD(master, shift, UD)
@@ -453,7 +476,7 @@ func mira_sparco_UD(master, shift, UD)
   } else {
     UD *= MIRA_MAS;
     V_UD = 2*bessj1(pi * B * UD) / ( pi * B * UD);
-  };
+  }
   vis_re = V_UD * cos( -2*pi*(xbin*u + ybin*v) );
   vis_im = sin( -2*pi*(xbin*u + ybin*v) );
 
@@ -461,8 +484,7 @@ func mira_sparco_UD(master, shift, UD)
   vis = transpose(vis);
 
   return vis;
-
-};
+}
 
 
 func mira_sparco_image(master, vis)
@@ -514,7 +536,7 @@ func mira_sparco_image(master, vis)
 //  h_set, master, model_vis_re = vis_re, model_vis_im = vis_im, model_vis = vis;
 
   return vis;
-};
+}
 
 
 
@@ -606,7 +628,6 @@ func add_keywords (master, fh)
     fits_set, fh, yid,  plugin.shift(is+1),  "SPARCO: DEC shift of the model (mas)";
   }
 //  fits_set, fh, "SWAVE0",  plugin.w0,  "Central wavelength (mum) for chromatism";
-
 }
 
 func add_extension (master, fh)
@@ -637,36 +658,62 @@ func read_keywords (tab, fh)
     SEE ALSO: write_keyword.
 */
 {
+  inform, "read_keywords() \"sparcomulti\" ...";
 
-  nmods            = mira_get_fits_real(     fh, "SNMODS");
-  h_set, tab,  sparco_w0 = mira_get_fits_real(   fh, "SWAVE0");
+  nmods     = mira_get_fits_integer(fh, "SNMODS");
+  sparco_w0 = mira_get_fits_real(   fh, "SWAVE0");
 
+  if (is_void(nmods)) {
+    nmods = 0;
+  }
   for (i=0; i<=nmods; ++i) {
     sparco_spectrum_i =  mira_get_fits_string(fh, swrite(format="SPEC%d", i));
-    sparco_spectrum =  _(sparco_spectrum,sparco_spectrum_i);
+    sparco_spectrum = _(sparco_spectrum,sparco_spectrum_i);
 
     if (sparco_spectrum_i =="POW") {
       sparco_index = _(sparco_index, mira_get_fits_real(fh, swrite(format="SIDX%d", i)));
-    }else if (sparco_spectrum_i  =="BB") {
+    } else if (sparco_spectrum_i  =="BB") {
       sparco_temp = _(sparco_temp, mira_get_fits_real(fh, swrite(format="STEM%d", i)));
     }
 
     if(i>0){
       sparco_flux = _(sparco_flux, mira_get_fits_real(fh, swrite(format="SFLU%d", i)));
       sparco_model_i = mira_get_fits_string(fh, swrite(format="SMOD%d", i));
-      if (sparco_model_i=="UD") {
+      sparco_model= _(sparco_model,sparco_model_i);
+
+      if (sparco_model_i == "UD") {
         sparco_params = _(sparco_params, mira_get_fits_real(fh, swrite(format="SPAR%d", i)));
       }
-      sparco_model=  _(sparco_model,sparco_model_i );
-      sparco_xy= _(sparco_xy, mira_get_fits_real(fh, swrite(format="SDEX%d", i)),mira_get_fits_real(fh, swrite(format="SDEY%d", i)));
+      if (sparco_model_i == "BG") {
+        sparco_xy= _(sparco_xy, 0, 0);
+      } else {
+        sparco_xy= _(sparco_xy, mira_get_fits_real(fh, swrite(format="SDEX%d", i)), mira_get_fits_real(fh, swrite(format="SDEY%d", i)));
+      }
     }
   }
-  h_set, tab, sparco_flux=sparco_flux,
+
+if (0) {
+  print("sparco_w0 :", sparco_w0);
+  print("sparco_flux :", sparco_flux);
+  print("sparco_model :", sparco_model);
+  print("sparco_xy :", sparco_xy);
+  print("sparco_spectrum :", sparco_spectrum);
+  print("sparco_index :", sparco_index);
+  print("sparco_temp :", sparco_temp);
+  print("sparco_params :", sparco_params);
+}
+
+  /* Set SPARCO settings */
+  h_set, tab, sparco_w0=sparco_w0,
+    sparco_flux=sparco_flux,
     sparco_model=sparco_model,
-    sparco_xy =sparco_xy,
+    sparco_xy=sparco_xy,
     sparco_spectrum=sparco_spectrum,
     sparco_index=sparco_index,
     sparco_temp=sparco_temp,
-    sparco_params = sparco_params ;
+    sparco_params=sparco_params ;
+
+  inform, "read_keywords() \"sparcomulti\" done.";
+
   return tab;
 }
